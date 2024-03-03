@@ -79,6 +79,13 @@ namespace com.daxode.imgui
                 ImGui.Checkbox("Demo Window", ref guiData.showDemoWindow);
                 ImGui.SameLine();
                 ImGui.Checkbox("Another Window", ref guiData.showAnotherWindow);
+
+                unsafe
+                {
+                    FixedString128Bytes text = "My Label";
+                    FixedString128Bytes fmt = "Pos: %f";
+                    // NativeImGuiMethods.igLabelTextV(text.GetUnsafePtr(), fmt.GetUnsafePtr(), __arglist(guiData.alpha));
+                }
                 
                 ImGui.SliderFloat("Some alpha value:", ref guiData.alpha, 0.0f, 1.0f);
                 guiData.shouldChangeColor = ImGui.ColorEdit3("Color of mesh", ref guiData.meshColor);

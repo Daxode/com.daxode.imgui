@@ -1,5 +1,6 @@
 using com.daxode.imgui;
 using Unity.Burst;
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
@@ -32,7 +33,7 @@ partial struct RotationSystem : ISystem
         => state.RequireForUpdate<ImGuiSystem.Singleton>();
 
     [BurstCompile]
-    public void OnUpdate(ref SystemState state)
+    public unsafe void OnUpdate(ref SystemState state)
     {
         ImGui.Begin("RotationSystem");
         foreach (var (lt, speed) in SystemAPI.Query<RefRW<LocalTransform>, RefRW<MySpeed>>())

@@ -48,6 +48,32 @@ namespace com.daxode.imgui
         int size;
     }
     
+    struct FunctionDefinition
+    {
+        public string args;
+        public FunctionTemplatedArguments[] argsT;
+        public string argsoriginal;
+        public string call_args;
+        public string cimguiname;
+        public string comment;
+        public Dictionary<string, string> defaults;
+        public string funcname;
+        public string isvararg;
+        public string location;
+        public string @namespace;
+        public string ov_cimguiname;
+        public string ret;
+        public string signature;
+        public string stname;
+        public bool templated;
+    }
+
+    struct FunctionTemplatedArguments
+    {
+        public string name;
+        public string type;
+    }
+    
     public static class GenerateWrappersFromJSON
     {
         const bool k_IsDebug = true;
@@ -55,17 +81,18 @@ namespace com.daxode.imgui
         [MenuItem("Tools/Generate ImGui Wrappers")]
         public static void GenerateWrappers() => GenerateWrappers(false);
         
-        [MenuItem("Tools/Generate ImGui Wrappers (with structs)")]
-        public static void GenerateWrappersWithStructs() => GenerateWrappers(true);
+        [MenuItem("Tools/Generate ImGui Wrappers (with functions)")]
+        public static void GenerateWrappersWithFunctions() => GenerateWrappers(true);
         
-        public static void GenerateWrappers(bool includeStructs)
+        public static void GenerateWrappers(bool includeFunctions)
         {
             // Read the structs and enums
             var structsAndEnumsReader = new JsonTextReader(new StreamReader(Path.GetFullPath("Packages/com.daxode.imgui/cimgui~/generator/output/structs_and_enums.json")));
             var typedefsDictionaryReader = new JsonTextReader(new StreamReader(Path.GetFullPath("Packages/com.daxode.imgui/cimgui~/generator/output/typedefs_dict.json")));
+            var definitionsDictionaryReader = new JsonTextReader(new StreamReader(Path.GetFullPath("Packages/com.daxode.imgui/cimgui~/generator/output/definitions.json")));
             var structsAndEnums = new JsonSerializer().Deserialize<StructsAndEnums>(structsAndEnumsReader);
             var typedefsDictionary = new JsonSerializer().Deserialize<Dictionary<string, string>>(typedefsDictionaryReader);
-            var sourceOutputPath = Path.GetFullPath("Packages/com.daxode.imgui/GeneratedWrappers.cs");
+            var definitionsDictionary = new JsonSerializer().Deserialize<Dictionary<string, FunctionDefinition[]>>(definitionsDictionaryReader);
             
             // remove typedefs where value starts with "struct "
             var listToRemove = new List<string>();
@@ -89,12 +116,11 @@ namespace com.daxode.imgui
             }
             
             // Write the source file
-            using (var sourceWriter = new StreamWriter(sourceOutputPath))
+            using (var sourceWriter = new StreamWriter(Path.GetFullPath("Packages/com.daxode.imgui/GeneratedWrappers.cs")))
             {
                 // Write the header
                 sourceWriter.WriteLine("using System;");
                 sourceWriter.WriteLine("using System.Runtime.InteropServices;");
-                
                 
                 // Write the namespace
                 sourceWriter.WriteLine("namespace com.daxode.imgui");
@@ -112,13 +138,122 @@ namespace com.daxode.imgui
                 sourceWriter.WriteLine();
                 
                 WriteEnums(sourceWriter, structsAndEnums);
-                if (includeStructs)
-                    WriteStructs(sourceWriter, structsAndEnums, typedefsDictionary);
+                WriteStructs(sourceWriter, structsAndEnums, typedefsDictionary);
+                
+                sourceWriter.WriteLine("}");
+            }
+            
+            // Write the source file
+            using (var sourceWriter = new StreamWriter(Path.GetFullPath("Packages/com.daxode.imgui/GeneratedNativeFunctions.cs")))
+            {
+                // Write the header
+                sourceWriter.WriteLine("using System;");
+                sourceWriter.WriteLine("using System.Runtime.InteropServices;");
+                
+                
+                // Write the namespace
+                sourceWriter.WriteLine("namespace com.daxode.imgui");
+                sourceWriter.WriteLine("{");
+                
+                if (includeFunctions)
+                    WriteFunctions(sourceWriter, definitionsDictionary, typedefsDictionary);
+                
                 sourceWriter.WriteLine("}");
             }
             
             // Log
             Debug.Log("Generated Wrappers");
+        }
+
+        static void WriteFunctions(StreamWriter sourceWriter, Dictionary<string,FunctionDefinition[]> definitionsDictionary, Dictionary<string,string> typedefsDictionary)
+        {
+            sourceWriter.WriteLine("\tinternal static class NativeImGuiMethods");
+            sourceWriter.WriteLine("\t{");
+            var currentStruct = string.Empty;
+            
+            foreach (var (definitionRawName, overloads) in definitionsDictionary)
+            {
+                foreach (var overloadData in overloads)
+                {
+                    if (string.IsNullOrEmpty(overloadData.ret) || overloadData.templated)
+                        continue;
+                    
+                    // Surround with region
+                    if (currentStruct != overloadData.stname)
+                    {
+                        if (!string.IsNullOrEmpty(currentStruct))
+                            sourceWriter.WriteLine("#endregion");
+                        var structName = string.IsNullOrEmpty(overloadData.stname) ? "ImGUI" : overloadData.stname;
+                        sourceWriter.WriteLine($"#region {structName}");
+                        currentStruct = overloadData.stname;
+                    }
+                    
+                    if (overloadData.comment != null)
+                    {
+                        sourceWriter.WriteLine($"\t\t/// <summary>");
+                        sourceWriter.WriteLine(overloadData.comment.Replace("//", "\t\t///").Replace("<", "&lt;").Replace(">", "&gt;"));
+                        sourceWriter.WriteLine($"\t\t/// </summary>");
+                    }
+                    sourceWriter.WriteLine("\t\t[DllImport(\"cimgui\", CallingConvention = CallingConvention.Cdecl)]");
+                    sourceWriter.Write("\t\tpublic static extern unsafe ");
+                    var overloadReturn = overloadData.ret;
+                    ApplyTypedefsRecursive(typedefsDictionary, ref overloadReturn);
+                    sourceWriter.Write(overloadReturn);
+                    sourceWriter.Write(' ');
+                    sourceWriter.Write(overloadData.ov_cimguiname);
+                    sourceWriter.Write('(');
+                    var minusOnIsVarArg = string.IsNullOrEmpty(overloadData.isvararg) ? 0 : 1;
+                    for (var i = 0; i < overloadData.argsT.Length-minusOnIsVarArg; i++)
+                    {
+                        if (i != 0)
+                            sourceWriter.Write(", ");
+                        
+                        var argumentName = overloadData.argsT[i].name;
+                        var argumentType = overloadData.argsT[i].type;
+                        
+                        if (!string.IsNullOrEmpty(argumentType))
+                            ApplyTypedefsRecursive(typedefsDictionary, ref argumentType);
+                        sourceWriter.Write(argumentType);
+                        if (argumentType != "__arglist")
+                        {
+                            sourceWriter.Write(' ');
+                            if (argumentName is "out" or "in" or "ref")
+                                sourceWriter.Write('@');
+                            sourceWriter.Write(argumentName);
+                        }
+                    }
+                    sourceWriter.WriteLine(");");
+
+                    // make sure it's partial so definitions can be added
+                    partialTypes.Add(overloadData.stname);
+                }
+            }
+            sourceWriter.WriteLine("#endregion");
+            sourceWriter.WriteLine("\t}");
+        }
+        
+        static void ApplyTypedefsRecursive(Dictionary<string, string> typedefsDictionary, ref string parameterRaw)
+        {
+            var parameter = parameterRaw;
+            var pointerCount = 0;
+            if (parameter.StartsWith("const "))
+                parameter = parameter[6..];
+            
+            while (parameter.EndsWith('*'))
+            {
+                pointerCount++;
+                parameter = parameter[..^1];
+            }
+            ApplyTypedefs(typedefsDictionary, ref parameter);
+            ApplyFunctionPointerParse(typedefsDictionary, ref parameter);
+            if (parameter == parameterRaw)
+                return;
+            
+            if (parameter.EndsWith('*'))
+                ApplyTypedefsRecursive(typedefsDictionary, ref parameter);
+            if (pointerCount > 0)
+                parameter += new string('*', pointerCount);
+            parameterRaw = parameter;
         }
 
         static readonly Dictionary<string, string> k_TypeMap = new Dictionary<string, string>
@@ -146,10 +281,20 @@ namespace com.daxode.imgui
             { "uintptr_t", "System.UIntPtr" },
             { "signed long long", "long" },
             { "void*", "System.IntPtr" },
-            
+            { "float[2]", "float*" },
+            { "float[3]", "float*" },
+            { "float[4]", "float*" },
+            { "int[2]", "int*" },
+            { "int[3]", "int*" },
+            { "int[4]", "int*" },
+            { "ImVec2[2]", "Unity.Mathematics.float2*" },
+            { "char* const[]", "byte**" },
             
             // mathematics
             { "ImVec1", "float" },
+            { "va_list", "__arglist" },
+            { "ImVector_ImWchar", "ImVector<uint>" },
+            { "ImVector_ImGuiTextRange", "ImVector<ImGuiTextRange>" },
             { "ImVec2", "Unity.Mathematics.float2" },
             { "ImVec2ih", "Unity.Mathematics.int2" },
             { "ImVec4", "Unity.Mathematics.float4" },
@@ -218,7 +363,7 @@ namespace com.daxode.imgui
             "ImVector",
             
         };
-        static readonly HashSet<string> k_PartialTypes = new HashSet<string>
+        static HashSet<string> partialTypes = new HashSet<string>
         {
             "ImVector",
             "ImDrawCmd",
@@ -256,7 +401,7 @@ namespace com.daxode.imgui
                 if (k_PublicTypes.Contains(structName))
                     sourceWriter.Write("public ");
                 sourceWriter.Write("unsafe ");
-                if (k_PartialTypes.Contains(structName))
+                if (partialTypes.Contains(structName))
                     sourceWriter.Write("partial ");
                 sourceWriter.WriteLine($"struct {structNameWithForceType}");
                 sourceWriter.WriteLine("\t{");
@@ -300,45 +445,8 @@ namespace com.daxode.imgui
                     ApplyTypedefs(typedefsDictionary, ref fieldType);
 
                     // if function pointer
-                    var functionPointerIndex = fieldType.IndexOf("(*)");
-                    if (functionPointerIndex != -1)
-                    {
-                        var returnType = fieldType[..functionPointerIndex];
-                        var parameters = fieldType[(functionPointerIndex + 4)..].Split(',');
-                        var functionPointerTypeBuilder = new System.Text.StringBuilder();
-                        functionPointerTypeBuilder.Append($"delegate* unmanaged[Cdecl]<");
-                        var first = true;
-                        foreach (var parameterRaw in parameters)
-                        {
-                            if (!first)
-                                functionPointerTypeBuilder.Append(", ");
-                            else
-                                first = false;
-                            
-                            var parameter = parameterRaw;
-                            if (parameter.StartsWith("const "))
-                                parameter = parameter[6..];
-                            
-                            parameter = parameter.Split(' ')[0];
-                            ApplyTypedefs(typedefsDictionary, ref parameter);
-                            var paramaterPointerCount = 0;
-                            while (parameter.EndsWith("*"))
-                            {
-                                parameter = parameter[..^1];
-                                paramaterPointerCount++;
-                            }
-                            ApplyTypedefs(typedefsDictionary, ref parameter);
-                            functionPointerTypeBuilder.Append(parameter);
-                            functionPointerTypeBuilder.Append('*', paramaterPointerCount);
-                        }
-                        if (!first)
-                            functionPointerTypeBuilder.Append(", ");
-                        ApplyTypedefs(typedefsDictionary, ref returnType);
-                        functionPointerTypeBuilder.Append($"{returnType}");
-                        functionPointerTypeBuilder.Append(">");
-                        fieldType = functionPointerTypeBuilder.ToString();
-                    }
-                    
+                    ApplyFunctionPointerParse(typedefsDictionary, ref fieldType);
+
                     // if Value Array
                     var fieldName = field.name;
                     if (field.name.EndsWith(']'))
@@ -417,6 +525,48 @@ namespace com.daxode.imgui
                     sourceWriter.WriteLine($"\t\tpublic fixed byte {name}[((int)({sizeText}))*({typeSize})];");
                     sourceWriter.WriteLine("\t}\n");
                 }
+            }
+        }
+
+        static void ApplyFunctionPointerParse(Dictionary<string, string> typedefsDictionary, ref string fieldType)
+        {
+            var functionPointerIndex = fieldType.IndexOf("(*)");
+            if (functionPointerIndex != -1)
+            {
+                var returnType = fieldType[..functionPointerIndex];
+                var parameters = fieldType[(functionPointerIndex + 4)..].Split(',');
+                var functionPointerTypeBuilder = new System.Text.StringBuilder();
+                functionPointerTypeBuilder.Append($"delegate* unmanaged[Cdecl]<");
+                var first = true;
+                foreach (var parameterRaw in parameters)
+                {
+                    if (!first)
+                        functionPointerTypeBuilder.Append(", ");
+                    else
+                        first = false;
+                            
+                    var parameter = parameterRaw;
+                    if (parameter.StartsWith("const "))
+                        parameter = parameter[6..];
+                            
+                    parameter = parameter.Split(' ')[0];
+                    ApplyTypedefs(typedefsDictionary, ref parameter);
+                    var paramaterPointerCount = 0;
+                    while (parameter.EndsWith("*"))
+                    {
+                        parameter = parameter[..^1];
+                        paramaterPointerCount++;
+                    }
+                    ApplyTypedefs(typedefsDictionary, ref parameter);
+                    functionPointerTypeBuilder.Append(parameter);
+                    functionPointerTypeBuilder.Append('*', paramaterPointerCount);
+                }
+                if (!first)
+                    functionPointerTypeBuilder.Append(", ");
+                ApplyTypedefs(typedefsDictionary, ref returnType);
+                functionPointerTypeBuilder.Append($"{returnType}");
+                functionPointerTypeBuilder.Append(">");
+                fieldType = functionPointerTypeBuilder.ToString();
             }
         }
 
