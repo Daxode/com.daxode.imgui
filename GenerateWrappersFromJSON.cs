@@ -10,6 +10,7 @@ namespace com.daxode.imgui
 {
     struct EnumValueData
     {
+        public string comment;
         public string calc_value;
         public string name;
         public string value;
@@ -17,6 +18,8 @@ namespace com.daxode.imgui
     
     struct StructsAndEnums
     {
+        public Dictionary<string, TypeComment> enum_comments;
+        public Dictionary<string, TypeComment> struct_comments;
         public Dictionary<string, EnumValueData[]> enums;
         public Dictionary<string, string> enumtypes;
         public Dictionary<string, string> locations;
@@ -25,9 +28,20 @@ namespace com.daxode.imgui
         public Dictionary<string, Dictionary<string, bool>> templates_done;
         public Dictionary<string, string> typenames;
     }
+
+    struct TypeComment
+    {
+        public string above;
+    }
+    
+    struct StructFieldComment
+    {
+        public string sameline;
+    }
     
     struct StructFieldData
     {
+        public StructFieldComment comment;
         public string name;
         public string template_type;
         public string type;
@@ -230,6 +244,13 @@ namespace com.daxode.imgui
                 var structNameWithForceType = structName;
                 if (k_ForceStructMap.TryGetValue(structName, out var structNameWithForceTypeOverride))
                     structNameWithForceType = structNameWithForceTypeOverride;
+                if (structsAndEnums.struct_comments.TryGetValue(structName, out var structComment))
+                {
+                    sourceWriter.WriteLine($"\t/// <summary>");
+                    sourceWriter.WriteLine(structComment.above.Replace("//", "\t///").Replace("<", "&lt;").Replace(">", "&gt;"));
+                    sourceWriter.WriteLine($"\t/// </summary>");
+                }
+                
                 sourceWriter.WriteLine($"\t[StructLayout(LayoutKind.Sequential)]");
                 sourceWriter.Write('\t');
                 if (k_PublicTypes.Contains(structName))
@@ -337,7 +358,8 @@ namespace com.daxode.imgui
                         fieldType = $"{structName}_{fieldName}Array";
                     }
                     
-                        
+                    if (field.comment.sameline != null) 
+                        sourceWriter.WriteLine($"\t\t/{field.comment.sameline.Replace("<", "&lt;").Replace(">", "&gt;")}");
                     sourceWriter.Write($"\t\tpublic ");
                     
                     var fieldBuilder = new System.Text.StringBuilder(fieldType);
@@ -470,6 +492,13 @@ namespace com.daxode.imgui
                     previousIsPrivate = false;
                 }
                 
+                if (structsAndEnums.enum_comments.TryGetValue(enumRawName, out var enumComment))
+                {
+                    sourceWriter.WriteLine($"\t/// <summary>");
+                    sourceWriter.WriteLine(enumComment.above.Replace("//", "\t///").Replace("<", "&lt;").Replace(">", "&gt;"));
+                    sourceWriter.WriteLine($"\t/// </summary>");
+                }
+                
                 // Write Enum start
                 if (enumName.EndsWith("Flags"))
                     sourceWriter.WriteLine($"\t[Flags]");
@@ -518,6 +547,9 @@ namespace com.daxode.imgui
             oldToNewTypeName[enumValueData.name] = $"{owningEnumName}.{enumValueName}";
 
             var value = enumValueData.value;
+            
+            if (enumValueData.comment != null) 
+                sourceWriter.WriteLine($"\t\t/{enumValueData.comment.Replace("<", "&lt;").Replace(">", "&gt;")}");
 
             // loop binary or values if one
             if (value.Contains(" | "))
