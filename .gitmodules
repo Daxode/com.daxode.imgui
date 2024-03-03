@@ -1,3 +1,4 @@
 [submodule "~cimgui"]
-	path = "./~cimgui"
+	path = ~cimgui
+	branch = docking
 	url = https://github.com/Daxode/cimgui.git
