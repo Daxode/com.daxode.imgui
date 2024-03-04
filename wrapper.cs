@@ -158,6 +158,12 @@ namespace com.daxode.imgui
 
 		/// Pop `count` style variable changes.
 		public static void PopStyleVar(int count = 1) => NativeImGuiMethods.igPopStyleVar(count);
+		
+		public static unsafe void PlotLines(FixedString128Bytes label, ReadOnlySpan<float> values, int values_offset = 0, FixedString128Bytes overlay_text = default, float scale_min = float.MaxValue, float scale_max = float.MaxValue, float2 graph_size = default, int stride = sizeof(float))
+		{
+			fixed (float* valuesPtr = values)
+				NativeImGuiMethods.igPlotLines_FloatPtr(label.GetUnsafePtr(), valuesPtr, values.Length, values_offset, overlay_text.GetUnsafePtr(), scale_min, scale_max, graph_size, stride);
+		}
 
 		/// set next window size. set axis to 0.0f to force an auto-fit on this axis. call before Begin()
 		public static void SetNextWindowSize(float2 size, ImGuiCond cond = 0) 

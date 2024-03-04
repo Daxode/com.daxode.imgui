@@ -36,11 +36,14 @@ partial struct RotationSystem : ISystem
     public unsafe void OnUpdate(ref SystemState state)
     {
         ImGui.Begin("RotationSystem");
+        var mySpeeds = new NativeList<float>(state.WorldUpdateAllocator);
         foreach (var (lt, speed) in SystemAPI.Query<RefRW<LocalTransform>, RefRW<MySpeed>>())
         {
             ImGui.SliderFloat($"Pos: {lt.ValueRO.Position}", ref speed.ValueRW.RadiansPerSecond, 0, 2 * math.PI);
             lt.ValueRW = lt.ValueRO.RotateY(speed.ValueRO.RadiansPerSecond * SystemAPI.Time.DeltaTime);
+            mySpeeds.Add(speed.ValueRO.RadiansPerSecond);
         }
+        ImGui.PlotLines("Speeds", mySpeeds.AsReadOnly().AsReadOnlySpan());
         ImGui.End();
     }
 }
