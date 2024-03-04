@@ -344,12 +344,12 @@ namespace com.daxode.imgui
 		/// 1 byte per-pixel
 		/// </summary>
 		[DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]
-		public static extern unsafe void ImFontAtlas_GetTexDataAsAlpha8(ImFontAtlas* self, byte** out_pixels, int* out_width, int* out_height, int* out_bytes_per_pixel);
+		public static extern unsafe void ImFontAtlas_GetTexDataAsAlpha8(ImFontAtlas* self, out byte* out_pixels, out int out_width, out int out_height, out int out_bytes_per_pixel);
 		/// <summary>
 		/// 4 bytes-per-pixel
 		/// </summary>
 		[DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]
-		public static extern unsafe void ImFontAtlas_GetTexDataAsRGBA32(ImFontAtlas* self, byte** out_pixels, int* out_width, int* out_height, int* out_bytes_per_pixel);
+		public static extern unsafe void ImFontAtlas_GetTexDataAsRGBA32(ImFontAtlas* self, out byte* out_pixels, out int out_width, out int out_height, out int out_bytes_per_pixel);
 		/// <summary>
 		/// Bit ambiguous: used to detect when user didn't build texture but effectively we should check TexID != 0 except that would be backend dependent...
 		/// </summary>
@@ -2149,17 +2149,17 @@ namespace com.daxode.imgui
 		/// classic imgui style
 		/// </summary>
 		[DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]
-		public static extern unsafe void igStyleColorsClassic(ImGuiStyle* dst);
+		public static extern unsafe void igStyleColorsClassic(out ImGuiStyle dst);
 		/// <summary>
 		/// new, recommended style (default)
 		/// </summary>
 		[DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]
-		public static extern unsafe void igStyleColorsDark(ImGuiStyle* dst);
+		public static extern unsafe void igStyleColorsDark(out ImGuiStyle dst);
 		/// <summary>
 		/// best used with borders and a custom, thicker font
 		/// </summary>
 		[DllImport("cimgui", CallingConvention = CallingConvention.Cdecl)]
-		public static extern unsafe void igStyleColorsLight(ImGuiStyle* dst);
+		public static extern unsafe void igStyleColorsLight(out ImGuiStyle dst);
 		/// <summary>
 		/// create a Tab behaving like a button. return true when clicked. cannot be selected in the tab bar.
 		/// </summary>
